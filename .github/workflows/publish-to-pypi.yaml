@@ -1,0 +1,159 @@
+name: Build and Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force publish even without version change'
+        required: false
+        default: false
+        type: boolean
+  workflow_run:
+    workflows: ["CI", "Version Check"]
+    types:
+      - completed
+    branches: [ main ]
+
+jobs:
+  check-prerequisites:
+    if: github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.event.inputs.force == 'true')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      can-publish: ${{ steps.check-workflows.outputs.can-publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install packaging dependency
+        run: |
+          python -m pip install --upgrade pip
+          pip install packaging
+
+      - name: Check if both workflows completed successfully and version changed
+        id: check-workflows
+        if: github.event_name == 'workflow_run'
+        run: |
+          # Get the commit SHA that triggered this
+          COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+
+          # Check CI workflow status for this commit
+          CI_STATUS=$(gh run list --workflow=ci.yaml --commit="$COMMIT_SHA" --limit=1 --json conclusion --jq '.[0].conclusion // "null"')
+
+          # Check Version Check workflow status for this commit
+          VERSION_CHECK_STATUS=$(gh run list --workflow=version-check.yaml --commit="$COMMIT_SHA" --limit=1 --json conclusion --jq '.[0].conclusion // "null"')
+
+          echo "CI Status: $CI_STATUS"
+          echo "Version Check Status: $VERSION_CHECK_STATUS"
+
+          # Check if version changed by comparing current vs previous
+          if [[ "$CI_STATUS" == "success" && "$VERSION_CHECK_STATUS" == "success" ]]; then
+            # Get current and previous versions to check if they differ
+            CURRENT_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+            PREVIOUS_VERSION=$(git show HEAD~1:pyproject.toml | python -c "import tomllib, sys; print(tomllib.load(sys.stdin.buffer)['project']['version'])" 2>/dev/null || echo "")
+
+            if [[ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" && -n "$PREVIOUS_VERSION" ]]; then
+              echo "can-publish=true" >> $GITHUB_OUTPUT
+              echo "✅ Both workflows passed and version changed: $PREVIOUS_VERSION → $CURRENT_VERSION"
+            else
+              echo "can-publish=false" >> $GITHUB_OUTPUT
+              echo "❌ No version change detected, skipping publish"
+            fi
+          else
+            echo "can-publish=false" >> $GITHUB_OUTPUT
+            echo "❌ Waiting for other workflows to complete"
+            echo "  CI: $CI_STATUS"
+            echo "  Version Check: $VERSION_CHECK_STATUS"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set can-publish for manual dispatch
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.force == 'true'
+        run: echo "can-publish=true" >> $GITHUB_OUTPUT
+
+      - name: Get version from pyproject.toml
+        id: get-version
+        run: |
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $VERSION"
+
+  build:
+    needs: check-prerequisites
+    if: needs.check-prerequisites.outputs.can-publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Check package
+        run: twine check dist/*
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: [check-prerequisites, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/cartesia-line
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+      contents: write  # needed for creating releases and tags
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create and push tag
+        run: |
+          VERSION=${{ needs.check-prerequisites.outputs.version }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+          echo "Created and pushed tag v$VERSION"
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          print-hash: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.check-prerequisites.outputs.version }}
+          name: Release v${{ needs.check-prerequisites.outputs.version }}
+          body: |
+            Release of cartesia-line v${{ needs.check-prerequisites.outputs.version }}
+
+            Published to PyPI: https://pypi.org/project/cartesia-line/${{ needs.check-prerequisites.outputs.version }}/
+          draft: false
+          prerelease: ${{ contains(needs.check-prerequisites.outputs.version, 'alpha') || contains(needs.check-prerequisites.outputs.version, 'beta') || contains(needs.check-prerequisites.outputs.version, 'rc') }}

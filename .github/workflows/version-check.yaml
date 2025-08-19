@@ -1,0 +1,86 @@
+name: Version Check
+
+on:
+  pull_request:
+    paths:
+      - 'pyproject.toml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'pyproject.toml'
+
+jobs:
+  check-version-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need full history to compare with base branch
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install packaging dependency
+        run: |
+          python -m pip install --upgrade pip
+          pip install packaging
+
+      - name: Check version bump
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python scripts/check_version_bump.py --comparison-ref origin/${{ github.base_ref }}
+          else
+            python scripts/check_version_bump.py --comparison-ref HEAD~1
+          fi
+
+      # If you are changing the version, only the version field should be modified.
+      # No other changes should be made to the pyproject.toml or any other file.
+      - name: Check for version-only changes
+        run: |
+          # Determine the comparison reference
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            COMPARISON_REF="origin/${{ github.base_ref }}"
+          else
+            COMPARISON_REF="HEAD~1"
+          fi
+
+          # Check if the version actually changed
+          CURRENT_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          PREVIOUS_VERSION=$(git show $COMPARISON_REF:pyproject.toml | python -c "import tomllib, sys; print(tomllib.load(sys.stdin.buffer)['project']['version'])" 2>/dev/null || echo "")
+
+          if [[ "$CURRENT_VERSION" == "$PREVIOUS_VERSION" ]]; then
+            echo "ℹ️  No version change detected, skipping version-only change validation"
+            exit 0
+          fi
+
+          # Get list of changed files (excluding pyproject.toml)
+          CHANGED_FILES=$(git diff --name-only $COMPARISON_REF | grep -v '^pyproject\.toml$' || true)
+
+          if [[ -n "$CHANGED_FILES" ]]; then
+            echo "❌ Version change detected, but other files were also modified:"
+            echo "$CHANGED_FILES"
+            echo ""
+            echo "When changing the version in pyproject.toml, no other files should be modified."
+            echo "Please create a separate commit for the version change."
+            exit 1
+          fi
+
+          # Check that only the version field changed in pyproject.toml
+          PYPROJECT_DIFF=$(git diff $COMPARISON_REF pyproject.toml)
+
+          # Look for changes that are NOT version-related
+          NON_VERSION_CHANGES=$(echo "$PYPROJECT_DIFF" | grep '^[+-]' | grep -v '^+++' | grep -v '^---' | grep -v 'version = ' || true)
+
+          if [[ -n "$NON_VERSION_CHANGES" ]]; then
+            echo "❌ pyproject.toml contains changes beyond the version field:"
+            echo "$PYPROJECT_DIFF"
+            echo ""
+            echo "When changing the version in pyproject.toml, only the version field should be modified."
+            echo "Please create a separate commit for other pyproject.toml changes."
+            exit 1
+          fi
+
+          echo "✅ Version change detected and only the version field was modified"
