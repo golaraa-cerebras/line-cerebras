@@ -6,6 +6,10 @@ Welcome to the Line Voice Agents SDK repository. This file contains guidelines f
 - **Source code:** `line/` contains the implementation
 - **Tests:** `tests/` contains the unit tests with a guide to writing tests below.
 - **Examples:** `examples/` contains examples of how to use the SDK.
+- **Example Integrations:** `example_integrations/` contains examples of how 3rd party providers manage to integrate with our Line SDK.
+
+  > [!NOTE]
+  > These examples are developed and maintained by our partners.
 
 
 ## Python Version Support
@@ -70,3 +74,15 @@ Reviewers look for the following:
 - Clear PR description and title
 - Unittests covering the new code
 - Consistent style: Use `pre-commit` to run linters and formatters.
+
+## Contributing to Our Example Integrations
+Our `example_integrations/` folder contains agents developed by our partners that utilizes their services. If you're interested in adding your own example integration, your PR must satisfy the following requirements:
+- Must be deployable on the Line platform
+  - You can connect an existing Git repository with the agent code via our [Github Integration](https://docs.cartesia.ai/line/integrations/github) to test the agent
+- Must have a README with clear documentation around the usecase with a link to your API docs
+  - README should include Prerequisites, Environment Variables, File Overview, and any other information that might be relevant to modifying or using the example agent
+  - See our [basic agent README](./examples/basic_chat/README.md) or [form filling README](./examples/form-filling/README.md) for reference on how to write the README
+- Must follow our repositories style guide
+
+  > [!NOTE]
+  > Partners are responsible for keeping their integration example up to date with Line changes
