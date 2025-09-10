@@ -19,11 +19,8 @@ Make sure to add the api keys in your `.env` file or to the API keys section in 
     ```bash
     pip install cerebras.cloud.sdk
     ```
-- Other packages:
-  ```bash
-  pip install -r requirements.txt
-
-  ```
+- Other packages: see `pyproject.toml`
+  
   System prompts, model ID and hyperparameters can be added to the `config.py` file. This file also includes the boolean parameter that determines if the background agents should be activated.
 
 ## Talking Agent
@@ -41,4 +38,4 @@ cs_client = AsyncCerebras(api_key=os.environ.get("CEREBRAS_API_KEY"))
 The async call handling function `handle_new_call` should include all the nodes and bridges between them. This function will be used to initialize the application object using the `VoiceAgentApp` class.
 
 ## Deploying the agent
-Finally, don't forget to add the `cartesia.toml` file that will install and run your script when deployed on the Agents platform. You can simply clone this repository and add it to your [agents dashboard](https://play.cartesia.ai/agents) along with your API Keys.
+Finally, don't forget to add the `pyproject.toml` file that will install and run your script when deployed on the Agents platform. You can simply clone this repository and add it to your [agents dashboard](https://play.cartesia.ai/agents) along with your API Keys.
