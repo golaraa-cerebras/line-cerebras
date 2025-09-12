@@ -1,4 +1,4 @@
-# Cartesia-Demo
+# Interview Practice Agent with Cartesia and Cerebras
 Let's design a real-time interviewer voice agent integrating Cerebras and Cartesia. The general workflow looks like this:
 <img width="1920" height="1183" alt="cartesia_demo_workflow" src="https://github.com/user-attachments/assets/254ad6ba-76b0-4fdb-8ae5-95c19c821592" />
 
@@ -11,20 +11,15 @@ First things first, here is what you will need:
 - A [Cartesia](https://play.cartesia.ai/agents) account and api key
 
 Make sure to add the api keys in your `.env` file or to the API keys section in your Cartesia account.
-- Installing Cartesia SDK:
+- Required packages:
   ```bash
-  pip install cartesia-line
+  cartesia-line
+  cerebras.cloud.sdk
+  python-dotenv
+  loguru
   ```
-- Installing Cerebras SDK:
-    ```bash
-    pip install cerebras.cloud.sdk
-    ```
-- Other packages:
-  ```bash
-  pip install -r requirements.txt
-
-  ```
-  System prompts, model ID and hyperparameters can be added to the `config.py` file. This file also includes the boolean parameter that determines if the background agents should be activated.
+Make sure to add the project details along with requirements to `pyproject.toml`.
+System prompts, model ID and hyperparameters can be added to the `config.py` file. This file also includes the boolean parameter that determines if the background agents should be activated.
 
 ## Talking Agent
 `interviewer.py` includes the ReasoningNode subclass that is customized to match Cerebras API. The required utility functions are included in the `cs_utils.py`. Please note that you will need to ensure the tool call schema matches the Cerebras Inference API format [here](https://inference-docs.cerebras.ai/capabilities/tool-use).
