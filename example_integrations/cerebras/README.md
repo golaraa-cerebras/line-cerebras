@@ -1,6 +1,6 @@
 # Interview Practice Agent with Cartesia and Cerebras
 Let's design a real-time interviewer voice agent integrating Cerebras and Cartesia. The general workflow looks like this:
-![Workflow](example_integrations/cerebras/Demo_workflow.png)
+![Workflow](Demo_workflow.png)
 
 
 We will guide you step by step on how to implement this workflow using Cartesia and Cerebras API's !
